@@ -1,0 +1,51 @@
+diff --git a/agent/credential_pool.py b/agent/credential_pool.py
+index 0d057f99..a6c31bb3 100644
+--- a/agent/credential_pool.py
++++ b/agent/credential_pool.py
+@@ -126,6 +126,21 @@ SUPPORTED_POOL_STRATEGIES = {
+     STRATEGY_LEAST_USED,
+ }
+ 
++# Generic extension seam: plugins (or other embedders) may register extra
++# selection strategies. Keys are lowercase; values are callables
++# ``(pool, available_entries) -> Optional[PooledCredential]`` where ``None``
++# means "abstain" and the pool falls back to its default order.
++CREDENTIAL_POOL_STRATEGY_REGISTRY: dict[str, Any] = {}
++
++
++def register_credential_pool_strategy(
++    name: str,
++    fn: Callable[[Any, list[Any]], Optional[Any]],
++) -> None:
++    """Register a custom credential-pool selection strategy function."""
++    CREDENTIAL_POOL_STRATEGY_REGISTRY[str(name).strip().lower()] = fn
++
++
+ # Cooldowns before retrying an exhausted credential. Transient 401s cool down
+ # briefly so single-key setups recover; 429/402/other take an hour.
+ # Provider-supplied reset_at timestamps override these defaults.
+@@ -563,7 +578,9 @@ def get_pool_strategy(provider: str) -> str:
+     if not isinstance(strategies, dict):
+         return STRATEGY_FILL_FIRST
+     strategy = str(strategies.get(provider, "") or "").strip().lower()
+-    return strategy if strategy in SUPPORTED_POOL_STRATEGIES else STRATEGY_FILL_FIRST
++    if strategy in SUPPORTED_POOL_STRATEGIES or strategy in CREDENTIAL_POOL_STRATEGY_REGISTRY:
++        return strategy
++    return STRATEGY_FILL_FIRST
+ 
+ 
+ def _keyed_custom_pool_matches(
+@@ -2140,7 +2157,12 @@ class CredentialPool(CredentialPoolAdminMixin, CredentialPoolModelCooldownMixin)
+         # logs immediately.
+         self._last_no_entries_log_at = None
+ 
+-        if self._strategy == STRATEGY_RANDOM:
++        strat_key = str(self._strategy or "").strip().lower()
++        if strat_key in CREDENTIAL_POOL_STRATEGY_REGISTRY:
++            entry = CREDENTIAL_POOL_STRATEGY_REGISTRY[strat_key](self, available)
++            if entry is None:
++                entry = available[0]
++        elif self._strategy == STRATEGY_RANDOM:
+             entry = random.choice(available)
+         elif self._strategy == STRATEGY_LEAST_USED and len(available) > 1:
+             entry = min(available, key=lambda e: e.request_count)

@@ -1,0 +1,30 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build archives (tests run in the ci workflow on the same push)
+        run: |
+          chmod +x build.sh
+          ./build.sh
+      - name: Verify checksums
+        run: cd dist && sha256sum -c SHA256SUMS
+      - name: Create or update GitHub release with assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/subscription-router-*.tar.gz dist/subscription-router-*.zip dist/SHA256SUMS \
+            --title "subscription-router $GITHUB_REF_NAME" \
+            --notes "Ready-to-install plugin archives. Requires the credential-pool strategy seam: apply patches/router-core-seam.patch (see README). Verify with: sha256sum -c SHA256SUMS" \
+          || gh release upload "$GITHUB_REF_NAME" --clobber \
+            dist/subscription-router-*.tar.gz dist/subscription-router-*.zip dist/SHA256SUMS

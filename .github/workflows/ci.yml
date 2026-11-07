@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch pinned Hermes base and apply the credential-pool seam
+        run: |
+          git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /tmp/hermes
+          git -C /tmp/hermes fetch --depth 1 origin 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19
+          git -C /tmp/hermes checkout FETCH_HEAD
+          git -C /tmp/hermes apply "$GITHUB_WORKSPACE/patches/router-core-seam.patch"
+          grep -q register_credential_pool_strategy /tmp/hermes/agent/credential_pool.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install pytest ruamel.yaml pyyaml
+
+      - name: Run integration tests
+        run: HERMES_SRC=/tmp/hermes ./run_tests.sh

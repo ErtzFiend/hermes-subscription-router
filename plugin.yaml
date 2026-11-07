@@ -1,0 +1,10 @@
+name: subscription-router
+version: 1.0.0
+description: "Quota-aware subscription account selection: Ending Soonest (default), Least remaining quota, or Most remaining quota, each configurable per weekly or session quota window, via Hermes credential-pool strategy keys."
+author: Jacob Hodge
+kind: backend
+provides_hooks: []
+platforms:
+  - linux
+  - windows
+  - darwin
